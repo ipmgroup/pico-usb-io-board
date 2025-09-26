@@ -128,8 +128,8 @@ create_udev_rules() {
 # DLN2 USB-I2C/SPI/GPIO adapter rules
 # Raspberry Pi Pico USB I/O Board (DLN2 compatible)
 
-# Main DLN2 device
-SUBSYSTEM=="usb", ATTRS{idVendor}=="1d50", ATTRS{idProduct}=="6170", MODE="0666", GROUP="plugdev"
+# Main DLN2 device with driver binding
+SUBSYSTEM=="usb", ATTRS{idVendor}=="1d50", ATTRS{idProduct}=="6170", MODE="0666", GROUP="plugdev", TAG+="uaccess"
 
 # I2C devices created by DLN2
 KERNEL=="i2c-[0-9]*", ACTION=="add", PROGRAM="/bin/sh -c 'echo %k | grep -q i2c && echo 1 || echo 0'", RESULT=="1", GROUP="i2c", MODE="0664"
@@ -143,14 +143,22 @@ SUBSYSTEM=="gpio", GROUP="gpio", MODE="0664"
 # USB serial ports (CDC-ACM)
 KERNEL=="ttyACM*", ATTRS{idVendor}=="1d50", ATTRS{idProduct}=="6170", MODE="0666", GROUP="dialout"
 
-# Generic USB device access
-SUBSYSTEM=="usb", ATTRS{idVendor}=="1d50", ATTRS{idProduct}=="6170", TAG+="uaccess"
+# DLN2 driver loading and module binding
+ACTION=="add", SUBSYSTEM=="usb", ATTRS{idVendor}=="1d50", ATTRS{idProduct}=="6170", RUN+="/bin/bash -c 'modprobe dln2; echo 1d50 6170 > /sys/bus/usb/drivers/dln2/new_id; modprobe gpio-dln2; modprobe i2c-dln2; modprobe spi-dln2; modprobe dln2-adc'"
 
-# Load DLN2 driver
-ACTION=="add", SUBSYSTEM=="usb", ATTR{idVendor}=="1d50", ATTR{idProduct}=="6170", RUN+="/sbin/modprobe -b dln2"
+# Alternative rules file for explicit module loading
+EOF
+
+    # Create additional udev rules file for module loading
+    cat > "/etc/udev/rules.d/99-dln2-modules.rules" << 'EOF'
+# DLN2 Module loading rules
+# Ensures all DLN2 interface modules are loaded when device is connected
+
+ACTION=="add", SUBSYSTEM=="usb", ATTRS{idVendor}=="1d50", ATTRS{idProduct}=="6170", RUN+="/bin/bash -c 'sleep 1; echo 1d50 6170 > /sys/bus/usb/drivers/dln2/new_id 2>/dev/null || true; modprobe gpio-dln2 2>/dev/null || true; modprobe i2c-dln2 2>/dev/null || true; modprobe spi-dln2 2>/dev/null || true; modprobe dln2-adc 2>/dev/null || true'"
 EOF
 
     success "udev rules created: $UDEV_RULES_FILE"
+    success "module loading rules created: /etc/udev/rules.d/99-dln2-modules.rules"
 }
 
 reload_udev() {
@@ -304,6 +312,8 @@ Your user has been added to these groups:
 - DLN2 device (1d50:6170) permissions configured
 - Automatic I2C/SPI/GPIO device permissions
 - USB serial port access enabled
+- Automatic driver binding and module loading
+- Enhanced module loading for all DLN2 interfaces
 
 ### Python Environment:
 - Virtual environment created in `.venv/`
@@ -368,6 +378,7 @@ print_final_instructions() {
     echo
     echo -e "${BLUE}📁 Files created:${NC}"
     echo "- $UDEV_RULES_FILE"
+    echo "- /etc/udev/rules.d/99-dln2-modules.rules"
     echo "- $SCRIPT_DIR/check_dln2.sh"
     echo "- $SCRIPT_DIR/scan_i2c.sh" 
     echo "- $SCRIPT_DIR/SETUP_README.md"
