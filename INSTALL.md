@@ -85,11 +85,10 @@ source .venv/bin/activate
 
 # Run SSD1306 tests
 cd ssd1306/
-python test_128x32.py
-python color_test_128x32.py
+python test_ssd1306_128x32.py
 
 # Auto-detect display and test
-python test_ssd1306_auto.py
+python auto_detect_ssd1306.py
 ```
 
 ### I2C Communication:

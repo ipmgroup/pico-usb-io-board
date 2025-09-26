@@ -340,7 +340,7 @@ source .venv/bin/activate
 ```bash
 source .venv/bin/activate
 cd ssd1306/
-python test_128x32.py
+python test_ssd1306_128x32.py
 ```
 
 ## ⚠️ Important Notes:

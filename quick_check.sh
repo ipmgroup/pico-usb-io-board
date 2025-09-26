@@ -143,7 +143,7 @@ if [ "$DLN2_FOUND" = true ] && [ ${#MISSING_GROUPS[@]} -eq 0 ] && [ "$I2C_BUSES"
     echo -e "${YELLOW}💡 Next steps:${NC}"
     echo -e "   ${BLUE}→ Connect SSD1306 display to I2C${NC}"
     echo -e "   ${BLUE}→ Run: source .venv/bin/activate${NC}"
-    echo -e "   ${BLUE}→ Test: python ssd1306/test_128x32.py${NC}"
+    echo -e "   ${BLUE}→ Test: python ssd1306/test_ssd1306_128x32.py${NC}"
 else
     echo -e "${YELLOW}⚠️  System Status: NEEDS ATTENTION${NC}"
     echo -e "${YELLOW}   Some components need configuration${NC}"
