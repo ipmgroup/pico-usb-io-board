@@ -1,9 +1,60 @@
+# Build directories and artifacts
 build/
-__pycache__
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.so
+*.o
 
+# Python virtual environments
+.venv/
+venv/
+env/
+ENV/
+
+# IDE and editor files
 *.sublime-project
 *.sublime-workspace
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
 
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Logs and temporary files
+*.log
+*.tmp
+*.temp
+dln2_setup.log
+
+# Test artifacts
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+
+# Documentation builds
+docs/_build/
+
+# Project specific
 gpio_pulse
 !gpio_pulse/
-*.o
+
+# PDF files (may be generated)
+*.pdf
+
+# Backup files
+*.bak
+*~
+*.orig
