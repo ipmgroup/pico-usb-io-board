@@ -93,17 +93,17 @@ python auto_detect_ssd1306.py
 
 ### I2C Communication:
 ```bash  
-# Scan I2C bus 5 for devices
-i2cdetect -y 5
+# Scan DLN2 I2C bus for devices (quick scan)
+i2cdetect -y -r 15
 
-# Read from SSD1306 at address 0x3c
-i2cget -y 5 0x3c
+# Read from SSD1306 at address 0x3c on DLN2 bus
+i2cget -y 15 0x3c
 
 # Manual I2C operations
 source .venv/bin/activate
 python -c "
 import smbus2
-bus = smbus2.SMBus(5)  # Use detected bus number
+bus = smbus2.SMBus(15)  # Use DLN2 bus number (typically 15)
 data = bus.read_byte(0x3c)  # Read from SSD1306
 print(f'Device response: {data:#x}')
 "
@@ -183,12 +183,12 @@ python -c "import smbus2; print('OK')"
 ### DLN2 Device:
 - Connect via USB-C cable
 - Device should enumerate as VID:PID = 1d50:6170
-- Creates multiple I2C buses (typically 5-15)
+- Creates one DLN2 I2C bus (typically i2c-15) among system buses
 
 ### SSD1306 Display Connection:
 - **VCC** → 3.3V or 5V
 - **GND** → Ground  
-- **SDA** → I2C Data (any DLN2 I2C bus)
+- **SDA** → I2C Data (DLN2 I2C bus, typically i2c-15)
 - **SCL** → I2C Clock (same bus as SDA)
 - **Address**: Usually 0x3C or 0x3D
 
