@@ -114,18 +114,18 @@ print(f'Device response: {data:#x}')
 After running the setup script, you'll find:
 
 ### Helper Scripts:
-- `check_dln2.sh` - Comprehensive device and system check
-- `scan_i2c.sh` - I2C bus scanner
-- `quick_check.sh` - Fast status verification
+- `quick_check.sh` - DLN2 device verification script
+- `scan_i2c.sh` - I2C bus scanning utility  
+- `run_ssd1306_demos.sh` - SSD1306 display demonstration runner
 
 ### Documentation:
-- `SETUP_README.md` - Detailed setup information  
-- `README_128x32_FIX.md` - Display configuration details
-- `README_AUTODETECT.md` - Auto-detection system info
+- `SETUP_README.md` - Auto-generated setup information (created by setup script)
+- `dln2_setup.log` - Setup process log file
+- This `INSTALL.md` - Complete setup and usage guide
 
 ### Configuration:
-- `.venv/` - Python virtual environment
-- `ssd1306_config.py` - Auto-generated I2C configuration
+- `.venv/` - Python virtual environment for isolated package management
+- `dln2_setup.log` - Detailed setup process log with timestamps
 
 ## ⚠️ Troubleshooting
 
