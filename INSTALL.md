@@ -93,8 +93,8 @@ python auto_detect_ssd1306.py
 
 ### I2C Communication:
 ```bash  
-# Scan DLN2 I2C bus for devices (quick scan)
-i2cdetect -y -r 15
+# Scan DLN2 I2C bus for devices
+i2cdetect -y 15
 
 # Read from SSD1306 at address 0x3c on DLN2 bus
 i2cget -y 15 0x3c

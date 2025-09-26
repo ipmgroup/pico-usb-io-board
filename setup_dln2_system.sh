@@ -258,23 +258,69 @@ EOF
     chmod +x "$SCRIPT_DIR/check_dln2.sh"
     chown "$USER_NAME:$USER_NAME" "$SCRIPT_DIR/check_dln2.sh"
     
-    # I2C scan script
+    # I2C scan script with DLN2 detection
     cat > "$SCRIPT_DIR/scan_i2c.sh" << 'EOF'
 #!/bin/bash
+
+# I2C Bus Scanner with DLN2 Detection
 echo "=== I2C Bus Scanner ==="
 echo
 
+# Function to check if I2C bus is DLN2
+is_dln2_i2c_bus() {
+    local bus_num=$1
+    local i2c_dev_path="/sys/class/i2c-dev/i2c-$bus_num"
+    
+    if [ -d "$i2c_dev_path" ]; then
+        local real_path=$(readlink -f "$i2c_dev_path")
+        if [[ "$real_path" == *"dln2"* ]]; then
+            return 0  # true
+        fi
+    fi
+    return 1  # false
+}
+
 if command -v i2cdetect >/dev/null 2>&1; then
+    DLN2_COUNT=0
+    SYSTEM_COUNT=0
+    
+    echo "📡 Scanning I2C buses:"
+    echo
+    
     for i2cbus in /dev/i2c-*; do
         if [[ -c "$i2cbus" ]]; then
             bus_num=$(basename "$i2cbus" | sed 's/i2c-//')
-            echo "🔍 Scanning I2C bus $bus_num:"
-            i2cdetect -y "$bus_num"
+            
+            if is_dln2_i2c_bus "$bus_num"; then
+                echo "🔍 I2C Bus $bus_num (DLN2):"
+                DLN2_COUNT=$((DLN2_COUNT + 1))
+                i2cdetect -y "$bus_num"
+            else
+                echo "🔍 I2C Bus $bus_num (System):"
+                SYSTEM_COUNT=$((SYSTEM_COUNT + 1))
+                # Use quiet mode for system buses to reduce warnings
+                i2cdetect -y -q "$bus_num" 2>/dev/null || i2cdetect -y "$bus_num"
+            fi
             echo
         fi
     done
+    
+    echo "📊 Summary:"
+    echo "   • Total buses: $((DLN2_COUNT + SYSTEM_COUNT))"
+    echo "   • DLN2 buses: $DLN2_COUNT"
+    echo "   • System buses: $SYSTEM_COUNT"
+    
+    if [ "$DLN2_COUNT" -gt 0 ]; then
+        echo
+        echo "💡 DLN2 buses are available for SSD1306 and other I2C devices"
+    else
+        echo
+        echo "⚠️  No DLN2 I2C buses found - check DLN2 device connection"
+    fi
+    
 else
     echo "❌ i2c-tools not installed"
+    echo "   Install with: sudo apt install i2c-tools"
 fi
 EOF
 

@@ -47,6 +47,18 @@ htmlcov/
 # Documentation builds
 docs/_build/
 
+# Generated helper scripts (created by setup_dln2_system.sh)
+scan_i2c.sh
+check_dln2.sh
+
+# Generated documentation files
+SETUP_README.md
+README_128x32_FIX.md
+README_AUTODETECT.md
+
+# Auto-generated configuration
+ssd1306_config.py
+
 # Project specific
 gpio_pulse
 !gpio_pulse/
