@@ -50,21 +50,56 @@ if [ ${#MISSING_GROUPS[@]} -gt 0 ]; then
 fi
 echo
 
-# Check I2C buses
-echo -e "${YELLOW}3. I2C Buses:${NC}"
-I2C_BUSES=($(ls /dev/i2c-* 2>/dev/null | wc -l))
-if [ "$I2C_BUSES" -gt 0 ]; then
-    echo -e "   ${GREEN}✅ Found $I2C_BUSES I2C bus(es)${NC}"
-    for bus in /dev/i2c-*; do
-        if [ -c "$bus" ]; then
-            BUS_NUM=$(basename "$bus" | sed 's/i2c-//')
-            echo -e "   ${BLUE}   → /dev/i2c-$BUS_NUM${NC}"
+# Function to check if I2C bus is DLN2
+is_dln2_i2c_bus() {
+    local bus_num=$1
+    local i2c_dev_path="/sys/class/i2c-dev/i2c-$bus_num"
+    
+    if [ -d "$i2c_dev_path" ]; then
+        local real_path=$(readlink -f "$i2c_dev_path")
+        if [[ "$real_path" == *"dln2"* ]]; then
+            return 0  # true
         fi
-    done
+    fi
+    return 1  # false
+}
+
+# Check DLN2 I2C buses
+echo -e "${YELLOW}3. DLN2 I2C Buses:${NC}"
+DLN2_I2C_COUNT=0
+DLN2_I2C_BUSES=()
+
+for bus in /dev/i2c-*; do
+    if [ -c "$bus" ]; then
+        BUS_NUM=$(basename "$bus" | sed 's/i2c-//')
+        if is_dln2_i2c_bus "$BUS_NUM"; then
+            DLN2_I2C_COUNT=$((DLN2_I2C_COUNT + 1))
+            DLN2_I2C_BUSES+=("$BUS_NUM")
+            echo -e "   ${BLUE}   → /dev/i2c-$BUS_NUM (DLN2)${NC}"
+        fi
+    fi
+done
+
+if [ "$DLN2_I2C_COUNT" -gt 0 ]; then
+    echo -e "   ${GREEN}✅ Found $DLN2_I2C_COUNT DLN2 I2C bus(es)${NC}"
+    
+    # Show total I2C buses for reference
+    TOTAL_I2C_BUSES=$(ls /dev/i2c-* 2>/dev/null | wc -l)
+    SYSTEM_I2C_BUSES=$((TOTAL_I2C_BUSES - DLN2_I2C_COUNT))
+    echo -e "   ${BLUE}   (Total I2C buses: $TOTAL_I2C_BUSES, System: $SYSTEM_I2C_BUSES, DLN2: $DLN2_I2C_COUNT)${NC}"
 else
-    echo -e "   ${RED}❌ No I2C buses found${NC}"
+    echo -e "   ${RED}❌ No DLN2 I2C buses found${NC}"
     echo -e "   ${YELLOW}   → Check DLN2 connection and kernel modules${NC}"
+    
+    # Show system buses for debugging
+    TOTAL_I2C_BUSES=$(ls /dev/i2c-* 2>/dev/null | wc -l)
+    if [ "$TOTAL_I2C_BUSES" -gt 0 ]; then
+        echo -e "   ${YELLOW}   → Found $TOTAL_I2C_BUSES system I2C buses (not DLN2)${NC}"
+    fi
 fi
+
+# Update I2C_BUSES variable to reflect only DLN2 buses
+I2C_BUSES=$DLN2_I2C_COUNT
 echo
 
 # Check udev rules
@@ -111,7 +146,7 @@ if [ -f "ssd1306_config.py" ]; then
     
     # Check if we can detect I2C bus and device
     if [ "$DLN2_FOUND" = true ] && [ "$I2C_BUSES" -gt 0 ]; then
-        echo -e "   ${BLUE}   → Testing I2C device detection...${NC}"
+        echo -e "   ${BLUE}   → Testing DLN2 I2C device detection...${NC}"
         source .venv/bin/activate 2>/dev/null
         if python -c "
 import sys
@@ -120,7 +155,7 @@ try:
     from ssd1306_autodetect import SSD1306AutoConfig
     config = SSD1306AutoConfig()
     bus, addr = config.detect_display()
-    print(f'   ${GREEN}✅ SSD1306 found on I2C bus {bus}, address {addr:#x}${NC}')
+    print(f'   ${GREEN}✅ SSD1306 found on DLN2 I2C bus {bus}, address {addr:#x}${NC}')
 except Exception as e:
     print(f'   ${YELLOW}⚠️  Auto-detection: {e}${NC}')
 " 2>/dev/null; then
@@ -141,7 +176,7 @@ if [ "$DLN2_FOUND" = true ] && [ ${#MISSING_GROUPS[@]} -eq 0 ] && [ "$I2C_BUSES"
     echo -e "${GREEN}   Your DLN2 setup is working correctly!${NC}"
     echo
     echo -e "${YELLOW}💡 Next steps:${NC}"
-    echo -e "   ${BLUE}→ Connect SSD1306 display to I2C${NC}"
+    echo -e "   ${BLUE}→ Connect SSD1306 display to DLN2 I2C pins${NC}"
     echo -e "   ${BLUE}→ Run: source .venv/bin/activate${NC}"
     echo -e "   ${BLUE}→ Test: python ssd1306/test_ssd1306_128x32.py${NC}"
 else
@@ -156,7 +191,7 @@ else
         echo -e "   ${BLUE}→ Logout and login to apply group changes${NC}"
     fi
     if [ "$I2C_BUSES" -eq 0 ]; then
-        echo -e "   ${BLUE}→ Check DLN2 driver and kernel modules${NC}"
+        echo -e "   ${BLUE}→ Check DLN2 driver and I2C kernel modules${NC}"
     fi
     echo -e "   ${BLUE}→ Run setup script if needed: sudo ./setup_dln2_system.sh${NC}"
 fi
