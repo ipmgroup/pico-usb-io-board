@@ -1,6 +1,7 @@
 # Build directories and artifacts
 build/
 __pycache__/
+__init__.py
 *.pyc
 *.pyo
 *.pyd
