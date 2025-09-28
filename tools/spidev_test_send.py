@@ -66,27 +66,36 @@ def main():
                 return False
         return False
 
+    # Decide which backend to use when auto selected before importing the
+    # DLN wrapper. This avoids importing pyusb on systems where it's not
+    # installed (for example a Raspberry Pi using /dev/spidev).
+    use_native = False
     if args.backend == 'native':
+        use_native = True
+    elif args.backend == 'auto':
+        use_native = _is_raspberry_pi()
+
+    if use_native:
         try:
             import spidev as native_spidev
         except Exception as e:
-            print('Native spidev not available:', e)
+            print('Native spidev requested but not available:', e)
             sys.exit(1)
 
-        dev = native_spidev.SpiDev()
+        dev_native = native_spidev.SpiDev()
         try:
             print('Opening native spidev...')
-            dev.open(0, 0)
+            dev_native.open(0, 0)
             try:
-                dev.max_speed_hz = 1000000
+                dev_native.max_speed_hz = 1000000
             except Exception:
                 pass
             try:
-                dev.mode = 0
+                dev_native.mode = 0
             except Exception:
                 pass
             try:
-                dev.bits_per_word = 8
+                dev_native.bits_per_word = 8
             except Exception:
                 pass
             tx = [0x9F, 0x00, 0x00, 0x00]
@@ -94,77 +103,33 @@ def main():
             if args.per_byte:
                 rx = []
                 for b in tx:
-                    rx += dev.xfer2([b])
+                    rx += dev_native.xfer2([b])
             else:
-                rx = dev.xfer2(tx)
+                rx = dev_native.xfer2(tx)
             print('RX bytes:', rx)
             print('RX hex :', ''.join(f'{b:02x}' for b in rx))
         finally:
             try:
-                dev.close()
+                dev_native.close()
             except Exception:
                 pass
+        return
 
-    else:  # dln or auto
-        try:
-            from tools.spidev import SpiDev
-        except Exception as e:
-            print('Failed to import wrapper:', e)
-            sys.exit(1)
+    # Import DLN wrapper only when we will use it to avoid import errors on
+    # systems without pyusb/linux-USB support.
+    try:
+        from tools.spidev import SpiDev
+    except Exception as e:
+        print('Failed to import wrapper:', e)
+        sys.exit(1)
 
-        # decide which backend to use when auto selected
-        use_native = False
-        if args.backend == 'native':
-            use_native = True
-        elif args.backend == 'auto':
-            use_native = _is_raspberry_pi()
-
-        if use_native:
-            # delegate to system spidev
-            try:
-                import spidev as native_spidev
-            except Exception as e:
-                print('Native spidev requested but not available:', e)
-                print('Falling back to DLN backend')
-                use_native = False
-
-        if use_native:
-            dev_native = native_spidev.SpiDev()
-            try:
-                print('Opening native spidev...')
-                dev_native.open(0, 0)
-                try:
-                    dev_native.max_speed_hz = 1000000
-                except Exception:
-                    pass
-                try:
-                    dev_native.mode = 0
-                except Exception:
-                    pass
-                try:
-                    dev_native.bits_per_word = 8
-                except Exception:
-                    pass
-                tx = [0x9F, 0x00, 0x00, 0x00]
-                print('Sending JEDEC (0x9F) via native spidev...')
-                rx = dev_native.xfer2(tx)
-                print('RX bytes:', rx)
-                print('RX hex :', ''.join(f'{b:02x}' for b in rx))
-            finally:
-                try:
-                    dev_native.close()
-                except Exception:
-                    pass
-            return
-
-        # use DLN wrapper
     dev = SpiDev()
     dev.host_hold_cs = bool(args.host_cs)
     dev.debug = bool(args.verbose)
     try:
         print('Opening SpiDev (DLN backend)...')
         dev.open(0, 0)
-        dev.max_speed_hz = 1000000
+        dev.max_speed_hz = 10000000
         dev.mode = 0
         dev.bits_per_word = 8
         tx = [0x9F, 0x00, 0x00, 0x00]
