@@ -60,26 +60,83 @@ def main():
         if 'arm' in m or 'aarch64' in m:
             # presence of spidev module is a good hint
             try:
+                # do not bind the module name here; just check importability
                 __import__('spidev')
                 return True
             except Exception:
                 return False
         return False
 
-    # Decide which backend to use when auto selected before importing the
-    # DLN wrapper. This avoids importing pyusb on systems where it's not
-    # installed (for example a Raspberry Pi using /dev/spidev).
-    use_native = False
-    if args.backend == 'native':
-        use_native = True
-    elif args.backend == 'auto':
-        use_native = _is_raspberry_pi()
+    def detect_backend_auto(prefer_native=False):
+        """Return 'native' or 'dln' depending on what is available.
 
-    if use_native:
+        Detection strategy:
+        - if prefer_native True, try native first
+        - check for /dev/spidev* devices; if present, try importing spidev
+        - otherwise try importing DLN wrapper (tools.spidev)
+        - return None when neither is available
+        """
+        # quick check for spidev devices
+        try:
+            spidev_paths = list(Path('/dev').glob('spidev*'))
+        except Exception:
+            spidev_paths = []
+
+        # prefer native when requested
+        if prefer_native and spidev_paths:
+            try:
+                __import__('spidev')
+                return 'native'
+            except Exception:
+                pass
+
+        # if there is a spidev device, try native first
+        if spidev_paths:
+            try:
+                __import__('spidev')
+                return 'native'
+            except Exception as e:
+                native_err = e
+        else:
+            native_err = None
+
+        # try DLN wrapper (deferred import)
+        try:
+            # only import the wrapper module, don't instantiate hardware
+            __import__('tools.spidev')
+            return 'dln'
+        except Exception as e:
+            dln_err = e
+
+        # neither backend available
+        print('No usable SPI backend found.')
+        if native_err:
+            print('native spidev import failed:', native_err)
+            print('If you want native spidev, install python3-spidev or')
+            print('use pip: pip3 install spidev')
+        if dln_err:
+            print('DLN wrapper import failed:', dln_err)
+            print('If you want DLN backend, install pyusb: pip3 install pyusb')
+        return None
+
+    # Decide backend
+    if args.backend == 'native':
+        chosen = 'native'
+    elif args.backend == 'dln':
+        chosen = 'dln'
+    else:
+        chosen = detect_backend_auto()
+
+    if chosen is None:
+        sys.exit(1)
+
+    if chosen == 'native':
         try:
             import spidev as native_spidev
         except Exception as e:
-            print('Native spidev requested but not available:', e)
+            print('Native spidev requested but import failed:', e)
+            print('Install system package: sudo apt install python3-spidev')
+            print('or pip3 install spidev')
             sys.exit(1)
 
         dev_native = native_spidev.SpiDev()
@@ -115,12 +172,12 @@ def main():
                 pass
         return
 
-    # Import DLN wrapper only when we will use it to avoid import errors on
-    # systems without pyusb/linux-USB support.
+    # chosen == 'dln'
     try:
         from tools.spidev import SpiDev
     except Exception as e:
-        print('Failed to import wrapper:', e)
+        print('Failed to import DLN wrapper (tools.spidev):', e)
+        print('If you want DLN backend, install pyusb: pip3 install pyusb')
         sys.exit(1)
 
     dev = SpiDev()
