@@ -90,15 +90,10 @@ def main():
             except Exception:
                 pass
 
-        # if there is a spidev device, try native first
+        # if there is a spidev device node, prefer native backend; we will
+        # attempt to import the Python module later when actually using it.
         if spidev_paths:
-            try:
-                __import__('spidev')
-                return 'native'
-            except Exception as e:
-                native_err = e
-        else:
-            native_err = None
+            return 'native'
 
         # try DLN wrapper (deferred import)
         try:
@@ -110,10 +105,6 @@ def main():
 
         # neither backend available
         print('No usable SPI backend found.')
-        if native_err:
-            print('native spidev import failed:', native_err)
-            print('If you want native spidev, install python3-spidev or')
-            print('use pip: pip3 install spidev')
         if dln_err:
             print('DLN wrapper import failed:', dln_err)
             print('If you want DLN backend, install pyusb: pip3 install pyusb')
