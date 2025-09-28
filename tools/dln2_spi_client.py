@@ -42,8 +42,9 @@ def find_device():
     return dev
 
 class Dln2Usb:
-    def __init__(self, dev):
+    def __init__(self, dev, debug=False):
         self.dev = dev
+        self.debug = bool(debug)
         self._setup()
         self.echo = 1
 
@@ -56,19 +57,31 @@ class Dln2Usb:
             pass
 
         cfg = self.dev.get_active_configuration()
-        intf = cfg[(0,0)]
+        intf = cfg[(0, 0)]
 
         # Find bulk endpoints
         ep_out = None
         ep_in = None
         for ep in intf.endpoints():
-            if usb.util.endpoint_direction(ep.bEndpointAddress) == usb.util.ENDPOINT_OUT and usb.util.endpoint_type(ep.bmAttributes) == usb.util.ENDPOINT_TYPE_BULK:
+            if (
+                usb.util.endpoint_direction(ep.bEndpointAddress)
+                == usb.util.ENDPOINT_OUT
+                and usb.util.endpoint_type(ep.bmAttributes)
+                == usb.util.ENDPOINT_TYPE_BULK
+            ):
                 ep_out = ep
-            if usb.util.endpoint_direction(ep.bEndpointAddress) == usb.util.ENDPOINT_IN and usb.util.endpoint_type(ep.bmAttributes) == usb.util.ENDPOINT_TYPE_BULK:
+            if (
+                usb.util.endpoint_direction(ep.bEndpointAddress)
+                == usb.util.ENDPOINT_IN
+                and usb.util.endpoint_type(ep.bmAttributes)
+                == usb.util.ENDPOINT_TYPE_BULK
+            ):
                 ep_in = ep
 
         if not ep_in or not ep_out:
-            raise RuntimeError('Could not find bulk IN/OUT endpoints on DLN2 interface')
+            raise RuntimeError(
+                'Could not find bulk IN/OUT endpoints on DLN2 interface'
+            )
 
         self.ep_out = ep_out.bEndpointAddress
         self.ep_in = ep_in.bEndpointAddress
@@ -99,25 +112,59 @@ class Dln2Usb:
         return bytes(self.dev.read(self.ep_in, size, timeout=2000))
 
     def _build_hdr(self, cmd_id, payload=b'', handle=DLN2_HANDLE_SPI):
-        # dln2_header: uint16_t size; uint16_t id; uint16_t echo; uint16_t handle; little-endian
+        # dln2_header: uint16_t size; uint16_t id; uint16_t echo;
+        # uint16_t handle; little-endian
         size = 8 + len(payload)  # header size (8) + payload
-        hdr = struct.pack('<HHHH', size, cmd_id, self.echo & 0xffff, handle & 0xffff)
+        hdr = struct.pack(
+            '<HHHH', size, cmd_id, self.echo & 0xffff, handle & 0xffff
+        )
         self.echo = (self.echo + 1) & 0xffff
         return hdr + payload
 
     def send_cmd(self, cmd_id, payload=b''):
         pkt = self._build_hdr(cmd_id, payload)
-        # The device expects full packet possibly split into USB packets up to endpoint size
+        # The device expects full packet possibly split into USB packets
+        # up to endpoint size
+        if self.debug:
+            try:
+                print(
+                    "[DLN.debug] OUT cmd=0x%04x len=%d pkt=%s"
+                    % (cmd_id, len(payload), pkt.hex())
+                )
+            except Exception:
+                pass
         self._send_raw(pkt)
         # read response: first read header+result (5*2 =10 bytes)
         # read a chunk; subsequent code will parse result and remaining data
         raw = self._read_raw(1024)
+        if self.debug:
+            try:
+                print("[DLN.debug] IN raw=%s" % (raw.hex(),))
+            except Exception:
+                pass
         if len(raw) < 10:
             raise RuntimeError('Short response from device')
         # parse response: 5 little-endian uint16: size, id, echo, handle, result
         size, rid, echo, handle, result = struct.unpack('<HHHHH', raw[:10])
         payload = raw[10: size]
-        return {'size': size, 'id': rid, 'echo': echo, 'handle': handle, 'result': result, 'data': payload}
+        resp = {
+            'size': size,
+            'id': rid,
+            'echo': echo,
+            'handle': handle,
+            'result': result,
+            'data': payload,
+        }
+        if self.debug:
+            try:
+                print(
+                    "[DLN.debug] RESP size=%d id=0x%04x echo=%d handle=%d result=%d"
+                    " data=%s"
+                    % (size, rid, echo, handle, result, payload.hex())
+                )
+            except Exception:
+                pass
+        return resp
 
     # High-level SPI operations
     def spi_enable(self):

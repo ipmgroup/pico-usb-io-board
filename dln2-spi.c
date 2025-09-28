@@ -248,21 +248,28 @@ static bool dln2_spi_read_write(struct dln2_slot *slot)
         return dln2_response_error(slot, DLN2_RES_INVALID_PORT_NUMBER);
     if (cmd->size > DLN2_SPI_MAX_XFER_SIZE)
         return dln2_response_error(slot, DLN2_RES_BAD_PARAMETER);
+    /* Check if the size matches the expected length */
     if (cmd->size != (len - 4))
         return dln2_response_error(slot, DLN2_RES_INVALID_BUFFER_SIZE);
+
+    /* Compute transfer length from the received USB payload and write that
+     * as the 16-bit response length before performing the transfer so the
+     * host parser can read rx_len correctly. */
+    uint16_t tx_len = (uint16_t)(len - 4);
+    put_unaligned_le16(tx_len, size);
 
     dln2_spi_cs_active(true);
 
     // The buffer addresses are 32-bit aligned and can be used directly.
     // It looks like txbuf can move ahead 8 bytes on rxbuf so we can't use buf directly
-    spi_write_read_blocking(spi_default, cmd->buf, dln2_spi_tmp_buf, cmd->size);
+    spi_write_read_blocking(spi_default, cmd->buf, dln2_spi_tmp_buf, tx_len);
 
     if (!(attr & DLN2_SPI_ATTR_LEAVE_SS_LOW))
         dln2_spi_cs_active(false);
 
-    memcpy(buf, dln2_spi_tmp_buf, cmd->size);
+    memcpy(buf, dln2_spi_tmp_buf, tx_len);
 
-    return dln2_response(slot, sizeof(uint16_t) + cmd->size);
+    return dln2_response(slot, sizeof(uint16_t) + tx_len);
 }
 
 static bool dln2_spi_read(struct dln2_slot *slot)

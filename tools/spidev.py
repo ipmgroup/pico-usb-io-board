@@ -18,6 +18,7 @@ from typing import List
 import struct
 import sys
 from pathlib import Path
+import time
 
 # Support running this module both as a package (import tools.spidev)
 # and directly (python tools/spidev.py). Try relative import first,
@@ -46,6 +47,8 @@ class SpiDev:
 
     def __init__(self):
         self._client = None
+        # when True, print debug info for per-byte transfers
+        self.debug = False
         # internal state backing properties
         self._max_speed_hz = 1000000
         self._mode = 0
@@ -62,9 +65,13 @@ class SpiDev:
     def open(self, bus: int, device: int):
         # bus/device are ignored for DLN device binding; kept for compatibility
         dev = find_device()
-        self._client = Dln2Usb(dev)
+
+        # forward debug flag into low-level DLN client
+        self._client = Dln2Usb(dev, debug=self.debug)
+
         # enable SPI on the adapter
         self._client.spi_enable()
+
         # apply initial settings
         self._client.spi_set_frequency(self._max_speed_hz)
         self._client.spi_set_mode(self._mode)
@@ -118,6 +125,47 @@ class SpiDev:
 
         # return rx as list of ints (byte values)
         return list(rx)
+
+    def xfer_per_byte(
+        self, data: List[int], inter_byte_delay_ms: float = 5.0
+    ) -> List[int]:
+        """Transfer bytes one-by-one, toggling CS per byte.
+
+        For DLN backend this sends one DLN SPI_READ_WRITE per byte with
+        leave_ss_low=False so adapter toggles CS for each byte. Returns
+        concatenated response bytes.
+        """
+        if not self._client:
+            raise RuntimeError('SpiDev not open')
+
+        result = bytearray()
+        for i, b in enumerate(data):
+            tx = bytes([int(b) & 0xff])
+            # ensure frame size set for 8-bit transfers
+            if int(self._bits_per_word) != 8:
+                self._set_frame_size(8)
+            # leave_ss_low False -> adapter toggles CS per transfer
+            if self.debug:
+                print(
+                    f"[SpiDev.debug] per-byte idx={i} tx=0x{b:02x} "
+                    "leave_ss_low=False"
+                )
+            rx = self._client.spi_read_write(tx, leave_ss_low=False)
+            if self.debug:
+                print(f"[SpiDev.debug] per-byte idx={i} raw_rx={rx}")
+            result += bytes(rx)
+            # small delay to let adapter finish CS toggle (ms)
+            if inter_byte_delay_ms and i != len(data) - 1:
+                # for sub-ms delays use busy-wait with perf_counter for better
+                # resolution; for larger delays, use time.sleep to yield CPU.
+                delay_s = float(inter_byte_delay_ms) / 1000.0
+                if delay_s < 0.002:
+                    end = time.perf_counter() + delay_s
+                    while time.perf_counter() < end:
+                        pass
+                else:
+                    time.sleep(delay_s)
+        return list(result)
 
     # Convenience aliases to match common spidev API
     def writebytes(self, data: List[int]):

@@ -21,6 +21,21 @@ def main():
     p.add_argument(
         '--host-cs', action='store_true', help='request host-held CS for DLN'
     )
+    p.add_argument(
+        '--verbose', action='store_true', help='show verbose DLN/spi debug'
+    )
+    p.add_argument(
+        '--per-byte', action='store_true',
+        help='send bytes one-by-one (toggle CS per byte)'
+    )
+    p.add_argument(
+        '--inter-byte-delay', type=float, default=5.0,
+        help=(
+            'inter-byte delay in milliseconds when using --per-byte '
+            '(default 5 ms). fractional ms allowed, e.g. 0.2 for 200us; '
+            'minimum 0.001 ms (1 µs)'
+        ),
+    )
     args = p.parse_args()
 
     def _is_raspberry_pi() -> bool:
@@ -76,7 +91,12 @@ def main():
                 pass
             tx = [0x9F, 0x00, 0x00, 0x00]
             print('Sending JEDEC (0x9F) via native spidev...')
-            rx = dev.xfer2(tx)
+            if args.per_byte:
+                rx = []
+                for b in tx:
+                    rx += dev.xfer2([b])
+            else:
+                rx = dev.xfer2(tx)
             print('RX bytes:', rx)
             print('RX hex :', ''.join(f'{b:02x}' for b in rx))
         finally:
@@ -138,29 +158,35 @@ def main():
             return
 
         # use DLN wrapper
-        dev = SpiDev()
-        dev.host_hold_cs = bool(args.host_cs)
-        try:
-            print('Opening SpiDev (DLN backend)...')
-            dev.open(0, 0)
-            dev.max_speed_hz = 1000000
-            dev.mode = 0
-            dev.bits_per_word = 8
-            tx = [0x9F, 0x00, 0x00, 0x00]
-            print(
-                'Sending JEDEC (0x9F) via DLN wrapper... host_hold_cs=',
-                dev.host_hold_cs,
+    dev = SpiDev()
+    dev.host_hold_cs = bool(args.host_cs)
+    dev.debug = bool(args.verbose)
+    try:
+        print('Opening SpiDev (DLN backend)...')
+        dev.open(0, 0)
+        dev.max_speed_hz = 1000000
+        dev.mode = 0
+        dev.bits_per_word = 8
+        tx = [0x9F, 0x00, 0x00, 0x00]
+        print(
+            'Sending JEDEC (0x9F) via DLN wrapper... host_hold_cs=',
+            dev.host_hold_cs,
+        )
+        if args.per_byte:
+            rx = dev.xfer_per_byte(
+                tx, inter_byte_delay_ms=args.inter_byte_delay
             )
+        else:
             rx = dev.xfer2(tx)
-            print('RX bytes:', rx)
-            print('RX hex :', ''.join(f'{b:02x}' for b in rx))
-        except Exception as e:
-            print('Test failed:', e)
-        finally:
-            try:
-                dev.close()
-            except Exception:
-                pass
+        print('RX bytes:', rx)
+        print('RX hex :', ''.join(f'{b:02x}' for b in rx))
+    except Exception as e:
+        print('Test failed:', e)
+    finally:
+        try:
+            dev.close()
+        except Exception:
+            pass
 
 
 if __name__ == '__main__':
