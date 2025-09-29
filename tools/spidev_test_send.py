@@ -165,7 +165,7 @@ def main():
 
     # chosen == 'dln'
     try:
-        from tools.dln_spidev import SpiDev
+        from tools.dln2_spidev import SpiDev
     except Exception as e:
         print('Failed to import DLN wrapper (tools.dln_spidev):', e)
         print('If you want DLN backend, install pyusb: pip3 install pyusb')
